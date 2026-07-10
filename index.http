@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="FitTrack" />
+  <meta name="theme-color" content="#f9f8f6" />
+  <title>FitTrack</title>
+
+  <script>
+    const manifest = {
+      name: "FitTrack — Personal Journey",
+      short_name: "FitTrack",
+      start_url: "./",
+      display: "standalone",
+      background_color: "#f9f8f6",
+      theme_color: "#D4A373",
+      orientation: "portrait",
+      icons: [
+        { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='25' fill='%23FDFBF7'/><text y='.95em' font-size='68' x='15'>🎀</text></svg>", sizes: "192x192", type: "image/svg+xml" }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+    const documentLink = document.createElement('link');
+    documentLink.rel = 'manifest'; documentLink.href = URL.createObjectURL(blob);
+    document.head.appendChild(documentLink);
+  </script>
+
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='25' fill='%23FDFBF7'/><text y='.95em' font-size='68' x='15'>🎀</text></svg>" />
+
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { 
+      background: linear-gradient(135deg, #fdfbfb 0%, #f4f0eb 100%); 
+      min-height: 100vh; 
+      font-family: 'Prompt', -apple-system, sans-serif; 
+    }
+    input, select, textarea { font-family: inherit; }
+    ::-webkit-scrollbar { display: none; }
+    option { background: white; color: #333; }
+    
+    .fade-in { animation: fadeIn 0.4s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ปรับแต่ง Grid ให้รองรับ iPhone 14 Pro Max อย่างพอดี */
+    .form-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media(min-width: 400px) { .form-grid { grid-template-columns: 1fr 1fr; } }
+    .file-input-wrapper {
+      position: relative; overflow: hidden; display: inline-block; width: 100%;
+      background: rgba(255,255,255,0.9); border: 1px dashed #D4A373; border-radius: 12px;
+      text-align: center; padding: 20px; cursor: pointer; color: #D4A373; font-weight: 500;
+    }
+    .file-input-wrapper input[type=file] {
+      font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const T = {
+      bgGrad: "linear-gradient(135deg, #fdfbfb 0%, #f4f0eb 100%)",
+      accent: "#D4A373", mint: "#9FA692", kbody: "#D4A3A3", gold: "#C9A66B", purple: "#A89CBA",
+      text: "#4A4A4A", muted: "#9E9E9E", dim: "#D1D1D1",
+      shimmer: "linear-gradient(135deg, rgba(255,255,255,1) 0%, rgba(248,245,242,0.6) 100%)",
+      garmin: "#6BC4E8" // สีฟ้าอ่อนสไตล์ Garmin
+    };
+
+    const DAYS = ["จันทร์","อังคาร","พุธ","พฤหัส","ศุกร์","เสาร์","อาทิตย์"];
+    const WORKOUT_TYPES = ["Pilates","Running (Zone 2)","Walking","Full Body","Upper Body","Lower Body / Glutes","HIIT","Recovery","พัก"];
+    
+    const load = (key) => { try { const v = localStorage.getItem("ft_"+key); return v ? JSON.parse(v) : null; } catch { return null; } };
+    const save = (key, val) => { try { localStorage.setItem("ft_"+key, JSON.stringify(val)); } catch {} };
+
+    const Badge = ({ children, color = T.accent }) => (
+      <span style={{ fontSize:10, fontWeight:500, color, background:`${color}15`, borderRadius:20, padding:"4px 10px", border:`1px solid ${color}30` }}>{children}</span>
+    );
+
+    const Inp = ({ label, type="text", value, onChange, placeholder, min, max }) => (
+      <div style={{ marginBottom:12 }}>
+        {label && <div style={{ fontSize:11, color:T.muted, marginBottom:6, fontWeight:500 }}>{label}</div>}
+        <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} min={min} max={max}
+          style={{ width:"100%", background:"rgba(255,255,255,0.9)", border:"1px solid rgba(0,0,0,0.05)", borderRadius:12, padding:"12px 14px", color:T.text, fontSize:15, outline:"none", boxSizing:"border-box" }} />
+      </div>
+    );
+
+    const Sel = ({ label, value, onChange, options }) => (
+      <div style={{ marginBottom:12 }}>
+        {label && <div style={{ fontSize:11, color:T.muted, marginBottom:6, fontWeight:500 }}>{label}</div>}
+        <select value={value} onChange={e=>onChange(e.target.value)}
+          style={{ width:"100%", background:"rgba(255,255,255,0.9)", border:"1px solid rgba(0,0,0,0.05)", borderRadius:12, padding:"12px 14px", color:T.text, fontSize:15, outline:"none" }}>
+          <option value="">— เลือก —</option>
+          {options.map(o=><option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+    );
+
+    function App() {
+      const [tab, setTab] = useState("dashboard");
+      const [logs, setLogs] = useState(() => load("logs") || []);
+      const [progs, setProgs] = useState(() => load("progs") || []);
+      const [showLog, setShowLog] = useState(false);
+      const [showProg, setShowProg] = useState(false);
+      
+      const emptyLog = () => ({ id:Date.now(), date:new Date().toISOString().slice(0,10), day:"", workoutType:"", duration:"", completed:false, notes:"", 
+        garminData: false, avgHR: "", maxHR: "", aerobic: "", anaerobic: "", exerciseLoad: "", activeCal: "", totalCal: "", photoBase64: "" });
+      
+      const [logF, setLogF] = useState(emptyLog());
+      const [progF, setProgF] = useState({ id:Date.now(), date:new Date().toISOString().slice(0,10), weight:"", waist:"", chest:"", hips:"" });
+      const [saved, setSaved] = useState(false);
+
+      const flash = () => { setSaved(true); setTimeout(()=>setSaved(false), 1800); };
+      
+      const saveLog = () => { 
+        const isEdit = logs.some(l => l.id === logF.id);
+        const newLogs = isEdit ? logs.map(l => l.id === logF.id ? logF : l) : [logF, ...logs];
+        setLogs(newLogs); save("logs", newLogs); setShowLog(false); flash(); setLogF(emptyLog());
+      };
+      
+      const editLog = (item) => { setLogF(item); setTab("log"); setShowLog(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+      const delLog = (id) => { if(confirm("ต้องการลบข้อมูลนี้ใช่หรือไม่?")) { const u=logs.filter(l=>l.id!==id); setLogs(u); save("logs",u); } };
+      
+      const saveProg = () => { 
+        const isEdit = progs.some(p => p.id === progF.id);
+        const newProgs = isEdit ? progs.map(p => p.id === progF.id ? progF : p) : [progF, ...progs];
+        setProgs(newProgs); save("progs", newProgs); setShowProg(false); flash(); setProgF({ id:Date.now(), date:new Date().toISOString().slice(0,10), weight:"", waist:"", chest:"", hips:"" });
+      };
+
+      const handleImageUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 800; // ย่อขนาดป้องกันเมมเต็ม
+            const scaleSize = MAX_WIDTH / img.width;
+            canvas.width = MAX_WIDTH;
+            canvas.height = img.height * scaleSize;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+            setLogF(f => ({ ...f, photoBase64: dataUrl }));
+          }
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const card = { background:"rgba(255,255,255,0.85)", borderRadius:20, padding:"18px", marginBottom:12, border:"1px solid rgba(255,255,255,1)", boxShadow:"0 4px 20px rgba(0,0,0,0.03)" };
+      const btnPrimary = (color) => ({ width:"100%", background:color, border:"none", borderRadius:16, padding:"16px", color:"white", fontSize:15, fontWeight:500, cursor:"pointer", transition:"0.2s", boxShadow:`0 4px 15px ${color}40` });
+      const sectionTitle = { fontSize:12, fontWeight:600, color:T.muted, letterSpacing:"0.05em", textTransform:"uppercase", marginTop:16, marginBottom:12, display:"flex", alignItems:"center", gap:6 };
+
+      const latestP = progs[0] || {};
+      const thisWeek = logs.filter(l => { const d=new Date(l.date); const now=new Date(); const ws=new Date(now.setDate(now.getDate()-now.getDay())); return d>=ws; });
+      const doneWeek = thisWeek.filter(l=>l.completed).length;
+
+      return (
+        <div style={{ background:T.bgGrad, minHeight:"100vh", color:T.text, paddingBottom:90 }}>
+          <div style={{ background:"rgba(253,251,247,0.8)", backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)", borderBottom:"1px solid rgba(0,0,0,0.03)", padding:"16px 20px", position:"sticky", top:0, zIndex:50, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:18, fontWeight:600 }}>FIT<span style={{color:T.accent}}>TRACK</span></div>
+              <div style={{ fontSize:11, color:T.muted, marginTop:2 }}>The Atmosphere of Growth</div>
+            </div>
+            {saved && <span style={{ fontSize:12, color:T.mint, fontWeight:500 }}>บันทึกสำเร็จ ✨</span>}
+          </div>
+
+          <div style={{ display:"flex", background:"rgba(253,251,247,0.8)", backdropFilter:"blur(20px)", overflowX:"auto" }}>
+            {[["dashboard","Overview"],["log","Workout Log"],["progress","Body Check"]].map(([k,label])=>(
+              <button key={k} onClick={()=>setTab(k)}
+                style={{ flex:1, border:"none", background:"none", padding:"16px 10px", fontSize:13, fontWeight:tab===k?600:400, cursor:"pointer",
+                  color:tab===k?T.accent:T.muted, borderBottom:tab===k?`2px solid ${T.accent}`:"2px solid transparent" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="fade-in" style={{ maxWidth:540, margin:"0 auto", padding:"20px 16px" }}>
+            
+            {/* ── DASHBOARD ── */}
+            {tab==="dashboard" && (
+              <div>
+                <div style={{ background:T.shimmer, borderRadius:24, padding:"24px", marginBottom:16, border:"1px solid rgba(255,255,255,1)", boxShadow:"0 8px 30px rgba(0,0,0,0.04)" }}>
+                  <div style={{ fontSize:12, color:T.muted, fontWeight:500, marginBottom:16 }}>สัปดาห์นี้</div>
+                  <div style={{ display:"flex", gap:20, alignItems:"center" }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:36, fontWeight:600, color:T.text }}>{doneWeek}<span style={{fontSize:18, color:T.muted}}>/5 วัน</span></div>
+                      <Badge color={T.mint}>สร้างวินัยอย่างต่อเนื่อง 🎀</Badge>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-grid" style={{ marginBottom:20 }}>
+                  <div style={{ background:"rgba(255,255,255,0.85)", borderRadius:16, padding:"14px 10px", textAlign:"center", border:"1px solid rgba(0,0,0,0.03)" }}>
+                    <div style={{ fontSize:22, fontWeight:600 }}>{latestP.weight || "-"}</div>
+                    <div style={{ fontSize:11, color:T.muted, marginTop:4 }}>น้ำหนักปัจจุบัน (kg)</div>
+                  </div>
+                  <div style={{ background:"rgba(255,255,255,0.85)", borderRadius:16, padding:"14px 10px", textAlign:"center", border:"1px solid rgba(0,0,0,0.03)" }}>
+                    <div style={{ fontSize:22, fontWeight:600 }}>{latestP.waist || "-"}</div>
+                    <div style={{ fontSize:11, color:T.muted, marginTop:4 }}>รอบเอว (cm)</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── LOG ── */}
+            {tab==="log" && (
+              <div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+                  <div style={{ fontSize:18, fontWeight:600 }}>บันทึกการออกกำลังกาย</div>
+                  <button onClick={()=>{ setLogF(emptyLog()); setShowLog(!showLog); }}
+                    style={{ background:T.text, border:"none", borderRadius:20, padding:"8px 16px", color:"white", fontSize:13, cursor:"pointer" }}>
+                    {showLog?"ยกเลิก":"+ เพิ่มใหม่"}
+                  </button>
+                </div>
+
+                {showLog && (
+                  <div className="fade-in" style={card}>
+                    <div className="form-grid">
+                      <Inp label="วันที่" type="date" value={logF.date} onChange={v=>setLogF(f=>({...f,date:v}))}/>
+                      <Sel label="ประเภท" value={logF.workoutType} onChange={v=>setLogF(f=>({...f,workoutType:v}))} options={WORKOUT_TYPES}/>
+                    </div>
+                    <Inp label="เวลาทั้งหมด (นาที)" type="number" value={logF.duration} onChange={v=>setLogF(f=>({...f,duration:v}))} placeholder="เช่น 35"/>
+                    
+                    {/* GARMIN SECTION */}
+                    <div style={sectionTitle}>
+                      <span style={{color:T.garmin}}>●</span> Garmin Stats
+                    </div>
+                    <div style={{ background: `${T.garmin}10`, border: `1px solid ${T.garmin}30`, borderRadius: 16, padding: "16px", marginBottom: 12 }}>
+                      <div className="form-grid">
+                        <Inp label="Avg Heart Rate" type="number" value={logF.avgHR} onChange={v=>setLogF(f=>({...f,avgHR:v}))} placeholder="134"/>
+                        <Inp label="Max Heart Rate" type="number" value={logF.maxHR} onChange={v=>setLogF(f=>({...f,maxHR:v}))} placeholder="160"/>
+                        <Inp label="Aerobic (TE)" type="number" value={logF.aerobic} onChange={v=>setLogF(f=>({...f,aerobic:v}))} placeholder="3.0"/>
+                        <Inp label="Anaerobic (TE)" type="number" value={logF.anaerobic} onChange={v=>setLogF(f=>({...f,anaerobic:v}))} placeholder="1.4"/>
+                        <Inp label="Exercise Load" type="number" value={logF.exerciseLoad} onChange={v=>setLogF(f=>({...f,exerciseLoad:v}))} placeholder="75"/>
+                        <Inp label="Active Calories" type="number" value={logF.activeCal} onChange={v=>setLogF(f=>({...f,activeCal:v}))} placeholder="185"/>
+                      </div>
+                      <Inp label="Total Calories Burned" type="number" value={logF.totalCal} onChange={v=>setLogF(f=>({...f,totalCal:v}))} placeholder="220"/>
+                    </div>
+
+                    <Inp label="โน้ตเพิ่มเติม" value={logF.notes} onChange={v=>setLogF(f=>({...f,notes:v}))} placeholder="ฟีลลิ่งวันนี้..."/>
+                    
+                    {/* PHOTO UPLOAD */}
+                    <div style={sectionTitle}>📸 รูปภาพความประทับใจ</div>
+                    {logF.photoBase64 ? (
+                      <div style={{ position:"relative", marginBottom:16 }}>
+                        <img src={logF.photoBase64} alt="Workout" style={{ width:"100%", borderRadius:12, border:"1px solid rgba(0,0,0,0.1)" }} />
+                        <button onClick={()=>setLogF(f=>({...f, photoBase64:""}))} style={{ position:"absolute", top:10, right:10, background:"rgba(0,0,0,0.6)", color:"white", border:"none", borderRadius:20, padding:"6px 12px", fontSize:12 }}>ลบรูป</button>
+                      </div>
+                    ) : (
+                      <div className="file-input-wrapper" style={{ marginBottom:16 }}>
+                        <span>+ เลือกรูปภาพ</span>
+                        <input type="file" accept="image/*" onChange={handleImageUpload} />
+                      </div>
+                    )}
+
+                    <label style={{ display:"flex", gap:10, alignItems:"center", fontSize:14, cursor:"pointer", marginBottom:16 }}>
+                      <input type="checkbox" checked={logF.completed} onChange={e=>setLogF(f=>({...f,completed:e.target.checked}))} style={{ width:18, height:18 }}/> ทำครบตามเป้าหมาย
+                    </label>
+                    <button onClick={saveLog} style={btnPrimary(T.text)}>{logF.id === logs.find(l=>l.id===logF.id)?.id ? "บันทึกการแก้ไข" : "บันทึกข้อมูล"}</button>
+                  </div>
+                )}
+
+                {logs.length===0 && !showLog && <div style={{ textAlign:"center", color:T.dim, padding:"40px 0" }}>ยังไม่มีข้อมูล เริ่มบันทึกกันเลย 🎀</div>}
+                {logs.map(l=>(
+                  <div key={l.id} style={card}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+                      <div style={{ fontSize:13, fontWeight:500 }}>{l.date} {l.completed && <span style={{color:T.mint, marginLeft:4}}>✓</span>}</div>
+                      <div>
+                        <button onClick={()=>editLog(l)} style={{ background:"none", border:"none", color:T.muted, cursor:"pointer", marginRight:12, fontSize:16 }}>✏️</button>
+                        <button onClick={()=>delLog(l.id)} style={{ background:"none", border:"none", color:T.dim, cursor:"pointer", fontSize:16 }}>✕</button>
+                      </div>
+                    </div>
+                    <div style={{ fontSize:16, fontWeight:600, color:T.text, marginBottom:10 }}>{l.workoutType || "ไม่ได้ระบุ"}</div>
+                    
+                    <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom: l.photoBase64 ? 12 : 0 }}>
+                      {l.duration && <Badge color={T.muted}>⏱ {l.duration} นาที</Badge>}
+                      {l.totalCal && <Badge color={T.accent}>🔥 {l.totalCal} kcal</Badge>}
+                      {l.avgHR && <Badge color={T.garmin}>❤️ {l.avgHR} bpm</Badge>}
+                      {l.exerciseLoad && <Badge color={T.purple}>Load {l.exerciseLoad}</Badge>}
+                    </div>
+
+                    {l.photoBase64 && (
+                       <img src={l.photoBase64} alt="Log Image" style={{ width:"100%", borderRadius:12, marginTop:10, border:"1px solid rgba(0,0,0,0.05)" }} />
+                    )}
+                    {l.notes && <div style={{ fontSize:13, color:T.muted, marginTop:10, padding:"8px 12px", background:"#FDFBF7", borderRadius:8 }}>"{l.notes}"</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── BODY PROGRESS ── */}
+            {tab==="progress" && (
+              <div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+                  <div style={{ fontSize:18, fontWeight:600 }}>การเปลี่ยนแปลงของร่างกาย</div>
+                  <button onClick={()=>{ setProgF({ id:Date.now(), date:new Date().toISOString().slice(0,10), weight:"", waist:"", chest:"", hips:"" }); setShowProg(!showProg); }}
+                    style={{ background:T.text, border:"none", borderRadius:20, padding:"8px 16px", color:"white", fontSize:13, cursor:"pointer" }}>
+                    {showProg?"ยกเลิก":"+ วัดสัดส่วน"}
+                  </button>
+                </div>
+
+                {showProg && (
+                  <div className="fade-in" style={card}>
+                    <div className="form-grid">
+                      <Inp label="วันที่" type="date" value={progF.date} onChange={v=>setProgF(f=>({...f,date:v}))}/>
+                      <Inp label="น้ำหนัก (kg)" type="number" value={progF.weight} onChange={v=>setProgF(f=>({...f,weight:v}))} placeholder="52.0" />
+                      <Inp label="รอบเอว (cm)" type="number" value={progF.waist} onChange={v=>setProgF(f=>({...f,waist:v}))} placeholder="64.0" />
+                      <Inp label="รอบอก (cm)" type="number" value={progF.chest} onChange={v=>setProgF(f=>({...f,chest:v}))} />
+                    </div>
+                    <button onClick={saveProg} style={{...btnPrimary(T.text), marginTop:12}}>{progF.id === progs.find(p=>p.id===progF.id)?.id ? "บันทึกการแก้ไข" : "บันทึกสัดส่วน"}</button>
+                  </div>
+                )}
+
+                {progs.map(p=>(
+                  <div key={p.id} style={card}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
+                      <span style={{ fontSize:13, fontWeight:500 }}>{p.date}</span>
+                      <button onClick={()=>{ setProgF(p); setShowProg(true); window.scrollTo(0,0); }} style={{ background:"none", border:"none", color:T.muted, cursor:"pointer" }}>✏️ แก้ไข</button>
+                    </div>
+                    <div className="form-grid" style={{ gap:8 }}>
+                      {p.weight && <div style={{ background:"#FDFBF7", padding:"10px", borderRadius:12, textAlign:"center" }}><div style={{fontSize:18, fontWeight:600}}>{p.weight}</div><div style={{fontSize:10, color:T.muted}}>น้ำหนัก (kg)</div></div>}
+                      {p.waist && <div style={{ background:"#FDFBF7", padding:"10px", borderRadius:12, textAlign:"center" }}><div style={{fontSize:18, fontWeight:600}}>{p.waist}</div><div style={{fontSize:10, color:T.muted}}>รอบเอว (cm)</div></div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+          </div>
+
+          {/* BOTTOM NAV */}
+          <div style={{ position:"fixed", bottom:0, left:0, right:0, background:"rgba(255,255,255,0.9)", backdropFilter:"blur(20px)", borderTop:"1px solid rgba(0,0,0,0.03)", display:"flex", zIndex:50, paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
+            {[["dashboard","✨","Overview"],["log","📋","Log"],["progress","📏","Body"]].map(([k,icon,label])=>(
+              <button key={k} onClick={()=>setTab(k)}
+                style={{ flex:1, border:"none", background:"none", padding:"12px 0", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                <span style={{ fontSize:22, filter:tab===k?"grayscale(0)":"grayscale(1) opacity(0.4)", transition:"0.2s" }}>{icon}</span>
+                <span style={{ fontSize:10, color:tab===k?T.text:T.muted, fontWeight:tab===k?500:400 }}>{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App/>, document.getElementById("root"));
+  </script>
+</body>
+</html>
